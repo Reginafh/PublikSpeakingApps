@@ -7,10 +7,9 @@ import requests
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, field_validator
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
-from pydantic import BaseModel, EmailStr
 
 # Memuat variabel lingkungan dari file .env
 load_dotenv()
@@ -28,26 +27,62 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-app = FastAPI()
+app = FastAPI(title="SpeakUp Backend API")
 
 @app.get("/")
 def read_root():
     return {"message": "Server FastAPI SpeakUp Berhasil Berjalan!"}
 
+
+# ============================================================
+# SKEMA DATA (PYDANTIC MODELS WITH VALIDATION)
+# ============================================================
+
 class RegisterModel(BaseModel):
-    email: EmailStr 
+    email: EmailStr
     password: str
+
+    @field_validator('email', 'password')
+    @classmethod
+    def check_not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Email dan password tidak boleh kosong atau hanya berisi spasi.")
+        return v
+
 
 class LoginWithPasswordModel(BaseModel):
-    email: str
+    email: EmailStr
     password: str
 
+    @field_validator('email', 'password')
+    @classmethod
+    def check_not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Email dan password tidak boleh kosong atau hanya berisi spasi.")
+        return v
+
+
 class VerifyOTPModel(BaseModel):
-    email: str
+    email: EmailStr
     otp_code: str
 
+    @field_validator('otp_code')
+    @classmethod
+    def check_otp_format(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Kode OTP tidak boleh kosong.")
+        if not v.isdigit():
+            raise ValueError("Format OTP harus berupa angka")
+        return v
+
+
 class ResendOTPModel(BaseModel):
-    email: str
+    email: EmailStr
+
+
+class ResetPasswordModel(BaseModel):
+    email: EmailStr
+
 
 class GoogleLoginModel(BaseModel):
     id_token: str
@@ -91,6 +126,38 @@ Tim SpeakUp
         server.sendmail(SENDER_EMAIL, target_email, msg.as_string())
 
 
+def send_reset_link_via_email(target_email: str, reset_link: str):
+    if not SENDER_EMAIL or not SENDER_PASSWORD:
+        raise HTTPException(
+            status_code=500, 
+            detail="Konfigurasi email pengirim belum diatur di file .env"
+        )
+
+    subject = "Reset Password - SpeakUp"
+    body = f"""Halo,
+
+Kami menerima permintaan untuk mereset kata sandi akun SpeakUp kamu.
+
+Klik tautan di bawah ini untuk mereset kata sandi kamu:
+{reset_link}
+
+Tautan ini hanya berlaku untuk waktu terbatas. Jika kamu tidak merasa meminta reset password, abaikan email ini.
+
+Salam hangat,
+Tim SpeakUp
+"""
+
+    msg = MIMEText(body, 'plain')
+    msg['Subject'] = subject
+    msg['From'] = SENDER_EMAIL
+    msg['To'] = target_email
+
+    with smtplib.SMTP('smtp.gmail.com', 587) as server:
+        server.starttls()
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+        server.sendmail(SENDER_EMAIL, target_email, msg.as_string())
+
+
 def generate_and_save_otp(email: str):
     """Membuat OTP acak, menyimpan ke Firestore, dan mengirim via email"""
     generated_otp = str(random.randint(100000, 999999))
@@ -108,28 +175,42 @@ def generate_and_save_otp(email: str):
     send_otp_via_email(email, generated_otp)
 
 
-# 1. SIGN-UP (PENDAFTARAN AKUN BARU + KIRIM OTP DENGAN ROLLBACK)
+# ============================================================
+# ENDPOINTS AUTENTIKASI
+# ============================================================
+
+# 1. SIGN-UP (PENDAFTARAN AKUN BARU + KIRIM OTP + ROLLBACK + FIXED 400/422)
 @app.post("/auth/register")
 def register(data: RegisterModel):
     created_user = None
+    email_clean = data.email.strip().lower()
+    
     try:
         # Step 1: Buat pengguna baru di Firebase Auth
         created_user = auth.create_user(
-            email=data.email,
+            email=email_clean,
             password=data.password
         )
         
         # Step 2: Kirim OTP untuk verifikasi pendaftaran
-        generate_and_save_otp(data.email)
+        generate_and_save_otp(email_clean)
         
         return {
             "status": "success",
-            "message": f"Akun {data.email} berhasil dibuat. Kode OTP telah dikirim ke email kamu."
+            "message": f"Akun {email_clean} berhasil dibuat. Kode OTP telah dikirim ke email kamu."
         }
     except auth.EmailAlreadyExistsError:
         raise HTTPException(status_code=400, detail="Email ini sudah terdaftar. Silakan lakukan Login.")
+    except (auth.InvalidEmailError, auth.InvalidArgumentError, ValueError) as e:
+        # Rollback jika ada error pada argument/email
+        if created_user:
+            try:
+                auth.delete_user(created_user.uid)
+            except Exception:
+                pass
+        raise HTTPException(status_code=400, detail=f"Format input tidak valid: {str(e)}")
     except Exception as e:
-        
+        # ROLLBACK: Jika pengiriman OTP gagal, hapus akun yang terlanjur dibuat
         if created_user:
             try:
                 auth.delete_user(created_user.uid)
@@ -139,7 +220,7 @@ def register(data: RegisterModel):
         raise HTTPException(status_code=500, detail=f"Gagal melakukan registrasi: {str(e)}")
 
 
-# 2. SIGN-IN (LOGIN EMAIL + PASSWORD -> LANGSUNG LOGIN TANPA OTP)
+# 2. SIGN-IN (LOGIN EMAIL + PASSWORD -> FIXED 400/401 ON CLIENT ERRORS)
 @app.post("/auth/login")
 def login_with_password(data: LoginWithPasswordModel):
     if not FIREBASE_API_KEY:
@@ -150,7 +231,7 @@ def login_with_password(data: LoginWithPasswordModel):
 
     endpoint_url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}"
     payload = {
-        "email": data.email,
+        "email": data.email.strip().lower(),
         "password": data.password,
         "returnSecureToken": True
     }
@@ -158,9 +239,15 @@ def login_with_password(data: LoginWithPasswordModel):
     response = requests.post(endpoint_url, json=payload)
     res_data = response.json()
     
-    # Jika email atau password salah
+    # Penanganan spesifik error dari Firebase REST API
     if response.status_code != 200:
-        raise HTTPException(status_code=401, detail="Email atau password yang kamu masukkan salah.")
+        error_msg = res_data.get("error", {}).get("message", "")
+        if "INVALID_EMAIL" in error_msg or "MISSING_PASSWORD" in error_msg:
+            raise HTTPException(status_code=400, detail="Format email atau password tidak valid.")
+        elif "EMAIL_NOT_FOUND" in error_msg or "INVALID_PASSWORD" in error_msg:
+            raise HTTPException(status_code=401, detail="Email atau password yang kamu masukkan salah.")
+        else:
+            raise HTTPException(status_code=400, detail="Gagal melakukan login. Periksa kembali input kamu.")
 
     # Ambil UID dan terbitkan custom_token
     uid = res_data.get("localId")
@@ -176,25 +263,29 @@ def login_with_password(data: LoginWithPasswordModel):
     }
 
 
-# 3. VERIFIKASI OTP REGISTRASI
+# 3. VERIFIKASI OTP REGISTRASI (FIXED SPECIFIC ERROR MESSAGES FOR BUG REPORT 3)
 @app.post("/auth/verify-otp")
 def verify_otp(data: VerifyOTPModel):
-    email = data.email
-    doc_ref = db.collection("otp_requests").document(email)
+    email_clean = data.email.strip().lower()
+    doc_ref = db.collection("otp_requests").document(email_clean)
     doc = doc_ref.get()
 
+    # 1. Cek apakah dokumen email ada di Firestore
     if not doc.exists:
         raise HTTPException(status_code=404, detail="Email belum meminta kode OTP")
 
     otp_data = doc.to_dict()
 
+    # 2. Cek apakah OTP sudah pernah digunakan
     if otp_data.get("is_used"):
         raise HTTPException(status_code=400, detail="Kode OTP sudah pernah digunakan")
 
-    if time.time() > otp_data.get("expires_at"):
-        raise HTTPException(status_code=400, detail="Kode OTP telah kadaluarsa")
+    # 3. Cek apakah OTP sudah kadaluwarsa
+    if time.time() > otp_data.get("expires_at", 0):
+        raise HTTPException(status_code=400, detail="Kode OTP telah kadaluwarsa")
 
-    if otp_data.get("otp_code") != data.otp_code:
+    # 4. Cek apakah kode OTP cocok
+    if str(otp_data.get("otp_code")) != str(data.otp_code):
         raise HTTPException(status_code=400, detail="Kode OTP salah")
 
     # Tandai OTP sudah digunakan
@@ -202,7 +293,7 @@ def verify_otp(data: VerifyOTPModel):
 
     # Dapatkan User Token
     try:
-        user = auth.get_user_by_email(email)
+        user = auth.get_user_by_email(email_clean)
         custom_token = auth.create_custom_token(user.uid)
         token_str = custom_token.decode("utf-8") if isinstance(custom_token, bytes) else custom_token
     except Exception:
@@ -218,8 +309,8 @@ def verify_otp(data: VerifyOTPModel):
 # 4. RESEND OTP (COOLDOWN 1 MENIT / 60 DETIK)
 @app.post("/auth/resend-otp")
 def resend_otp(data: ResendOTPModel):
-    email = data.email
-    doc_ref = db.collection("otp_requests").document(email)
+    email_clean = data.email.strip().lower()
+    doc_ref = db.collection("otp_requests").document(email_clean)
     doc = doc_ref.get()
 
     if doc.exists:
@@ -236,7 +327,7 @@ def resend_otp(data: ResendOTPModel):
             )
 
     try:
-        generate_and_save_otp(email)
+        generate_and_save_otp(email_clean)
         return {
             "status": "success",
             "message": "Kode OTP baru berhasil dikirim ke email kamu."
@@ -245,7 +336,31 @@ def resend_otp(data: ResendOTPModel):
         raise HTTPException(status_code=500, detail=f"Gagal mengirim ulang OTP: {str(e)}")
 
 
-# 5. GOOGLE LOGIN
+# 5. RESET PASSWORD (ENDPOINT BARU)
+@app.post("/auth/reset-password")
+def reset_password(data: ResetPasswordModel):
+    email_clean = data.email.strip().lower()
+    try:
+        # Generasi tautan reset password resmi dari Firebase Auth
+        link = auth.generate_password_reset_link(email_clean)
+        
+        # Kirim tautan ke email pengguna
+        send_reset_link_via_email(email_clean, link)
+        
+        return {
+            "status": "success",
+            "message": f"Link reset password berhasil dikirim ke email {email_clean}.",
+            "reset_link": link  # Tautan dikembalikan di JSON untuk kemudahan testing lokal
+        }
+    except auth.UserNotFoundError:
+        raise HTTPException(status_code=404, detail="Email tidak terdaftar di sistem.")
+    except (auth.InvalidEmailError, ValueError):
+        raise HTTPException(status_code=400, detail="Format email tidak valid.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal memproses reset password: {str(e)}")
+
+
+# 6. GOOGLE LOGIN
 @app.post("/auth/google-login")
 def verify_google_token(data: GoogleLoginModel):
     try:
