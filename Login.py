@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
+from pydantic import BaseModel, EmailStr
 
 # Memuat variabel lingkungan dari file .env
 load_dotenv()
@@ -33,13 +34,8 @@ app = FastAPI()
 def read_root():
     return {"message": "Server FastAPI SpeakUp Berhasil Berjalan!"}
 
-
-# ============================================================
-# SKEMA DATA (PYDANTIC MODELS)
-# ============================================================
-
 class RegisterModel(BaseModel):
-    email: str
+    email: EmailStr 
     password: str
 
 class LoginWithPasswordModel(BaseModel):
@@ -112,21 +108,18 @@ def generate_and_save_otp(email: str):
     send_otp_via_email(email, generated_otp)
 
 
-# ============================================================
-# ENDPOINTS AUTENTIKASI
-# ============================================================
-
-# 1. SIGN-UP (PENDAFTARAN AKUN BARU + KIRIM OTP)
+# 1. SIGN-UP (PENDAFTARAN AKUN BARU + KIRIM OTP DENGAN ROLLBACK)
 @app.post("/auth/register")
 def register(data: RegisterModel):
+    created_user = None
     try:
-        # Buat pengguna baru di Firebase Auth
-        user = auth.create_user(
+        # Step 1: Buat pengguna baru di Firebase Auth
+        created_user = auth.create_user(
             email=data.email,
             password=data.password
         )
         
-        # Kirim OTP untuk verifikasi pendaftaran
+        # Step 2: Kirim OTP untuk verifikasi pendaftaran
         generate_and_save_otp(data.email)
         
         return {
@@ -136,6 +129,13 @@ def register(data: RegisterModel):
     except auth.EmailAlreadyExistsError:
         raise HTTPException(status_code=400, detail="Email ini sudah terdaftar. Silakan lakukan Login.")
     except Exception as e:
+        
+        if created_user:
+            try:
+                auth.delete_user(created_user.uid)
+            except Exception:
+                pass
+                
         raise HTTPException(status_code=500, detail=f"Gagal melakukan registrasi: {str(e)}")
 
 
