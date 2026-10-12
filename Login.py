@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, EmailStr, field_validator
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
+from Home import router as home_router
 
 # Memuat variabel lingkungan dari file .env
 load_dotenv()
@@ -33,10 +34,7 @@ app = FastAPI(title="SpeakUp Backend API")
 def read_root():
     return {"message": "Server FastAPI SpeakUp Berhasil Berjalan!"}
 
-
-# ============================================================
-# SKEMA DATA (PYDANTIC MODELS WITH VALIDATION)
-# ============================================================
+app.include_router(home_router)
 
 class RegisterModel(BaseModel):
     email: EmailStr
@@ -87,10 +85,6 @@ class ResetPasswordModel(BaseModel):
 class GoogleLoginModel(BaseModel):
     id_token: str
 
-
-# ============================================================
-# FUNGSI PEMBANTU (HELPER FUNCTIONS)
-# ============================================================
 
 def send_otp_via_email(target_email: str, otp_code: str):
     if not SENDER_EMAIL or not SENDER_PASSWORD:
@@ -174,10 +168,6 @@ def generate_and_save_otp(email: str):
 
     send_otp_via_email(email, generated_otp)
 
-
-# ============================================================
-# ENDPOINTS AUTENTIKASI
-# ============================================================
 
 # 1. SIGN-UP (PENDAFTARAN AKUN BARU + KIRIM OTP + ROLLBACK + FIXED 400/422)
 @app.post("/auth/register")
