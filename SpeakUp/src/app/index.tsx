@@ -1,15 +1,17 @@
-import React, { useState } from 'react';
-import { useRouter, Link } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { useState } from 'react';
 
-import { 
-  StyleSheet, 
-  View, 
-  TextInput, 
-  TouchableOpacity, 
-  Text, 
-  Alert, 
-  KeyboardAvoidingView, 
-  Platform 
+import { Ionicons } from '@expo/vector-icons';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -90,176 +92,173 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
+        style={{ flex: 1 }}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>SpeakUp</Text>
-          <Text style={styles.subtitle}>
-            {isLogin ? 'Welcome back! Ready to practice?' : 'Create an account to start improving.'}
-          </Text>
-        </View>
-
-        <View style={styles.form}>
-          <TextInput
-            style={styles.input}
-            placeholder="Email address"
-            placeholderTextColor="#888"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
+        <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
           
-          <View style={styles.passwordContainer}>
-            <TextInput
-              style={styles.passwordInput}
-              placeholder="Password"
-              placeholderTextColor="#888"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword} // Toggles masking based on state
-            />
+          {/* LOGO & HEADER */}
+          <View style={styles.header}>
+            <View style={styles.logoContainer}>
+              <View style={styles.logoBox}>
+                <Ionicons name="mic" size={32} color="#fff" />
+              </View>
+              {/* Notification Dot */}
+              <View style={styles.notificationDot}>
+                <View style={styles.innerDot} />
+              </View>
+            </View>
+            <Text style={styles.title}>SpeakUp</Text>
+            
+            <View style={styles.subtitleContainer}>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>Gemini AI</Text>
+              </View>
+              <Text style={styles.subtitleText}>Master the Art of Speaking</Text>
+            </View>
+          </View>
+
+          {/* TAB TOGGLE */}
+          <View style={styles.tabContainer}>
             <TouchableOpacity 
-              style={styles.visibilityToggle} 
-              onPress={() => setShowPassword(!showPassword)}
+              style={[styles.tabButton, isLogin && styles.activeTab]} 
+              onPress={() => setIsLogin(true)}
             >
-              <Text style={styles.visibilityText}>
-                {showPassword ? 'Hide' : 'Show'}
-              </Text>
+              <Text style={[styles.tabText, isLogin && styles.activeTabText]}>Sign In</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.tabButton, !isLogin && styles.activeTab]} 
+              onPress={() => setIsLogin(false)}
+            >
+              <Text style={[styles.tabText, !isLogin && styles.activeTabText]}>Create Account</Text>
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.primaryButton} onPress={handleAuth}>
-            <Text style={styles.buttonText}>{isLogin ? 'Log In' : 'Sign Up'}</Text>
-          </TouchableOpacity>
+          {/* FORM */}
+          <View style={styles.form}>
+            <Text style={styles.inputLabel}>Email Address</Text>
+            <View style={styles.inputContainer}>
+              <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="alex.morgan@example.com"
+                placeholderTextColor="#999"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+            
+            <View style={styles.passwordHeader}>
+              <Text style={styles.inputLabel}>Password</Text>
+              {isLogin && (
+                <TouchableOpacity>
+                  <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <View style={styles.inputContainer}>
+              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="••••••••••••"
+                placeholderTextColor="#999"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#666" />
+              </TouchableOpacity>
+            </View>
 
-          <TouchableOpacity style={styles.switchButton} onPress={() => setIsLogin(!isLogin)}>
-            <Text style={styles.switchText}>
-              {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Log In"}
-            </Text>
-          </TouchableOpacity>
+            {/* INFO BOX */}
+            <View style={styles.infoBox}>
+              <Ionicons name="analytics-outline" size={20} color="#432CBA" style={styles.infoIcon} />
+              <Text style={styles.infoText}>
+                Real-time filler-word tracking, pacing metrics, and vocal tone AI diagnostics ready upon login.
+              </Text>
+            </View>
 
-          <View style={styles.dividerContainer}>
-            <View style={styles.line} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.line} />
+            {/* PRIMARY BUTTON */}
+            <TouchableOpacity style={styles.primaryButton} onPress={handleAuth}>
+              <Text style={styles.buttonText}>{isLogin ? 'Sign In' : 'Create Account'}</Text>
+              <Ionicons name="arrow-forward" size={20} color="#fff" style={styles.buttonIcon} />
+            </TouchableOpacity>
+
+            {/* DIVIDER */}
+            <View style={styles.dividerContainer}>
+              <View style={styles.line} />
+              <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
+              <View style={styles.line} />
+            </View>
+
+            {/* GOOGLE BUTTON */}
+            <TouchableOpacity style={styles.googleButton} onPress={() => Alert.alert('Google Auth')}>
+              <Ionicons name="logo-google" size={20} color="#DB4437" style={styles.googleIcon} />
+              <Text style={styles.googleButtonText}>Continue with Google</Text>
+            </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.googleButton} onPress={handleGoogleAuth}>
-            <Text style={styles.googleButtonText}>Continue with Google</Text>
-          </TouchableOpacity>
-        </View>
+          {/* FOOTER */}
+          <Text style={styles.footerText}>
+            By continuing, you agree to SpeakUp's <Text style={styles.linkText}>Terms of Service</Text> and <Text style={styles.linkText}>Privacy Policy</Text>.
+          </Text>
+
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
+const PRIMARY_COLOR = '#3924B7'; // Deep purple from the design
+
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  container: {
-    flex: 1,
-    padding: 24,
-    justifyContent: 'center',
-  },
-  header: {
-    marginBottom: 40,
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#777',
-    textAlign: 'center',
-  },
-  form: {
-    width: '100%',
-  },
-  input: {
-    backgroundColor: '#f5f5f5',
-    padding: 16,
-    borderRadius: 8,
-    fontSize: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
+  safeArea: { flex: 1, backgroundColor: '#F8F9FC' }, // Very slight blue/purple tint background
+  scrollContainer: { padding: 24, flexGrow: 1, justifyContent: 'center' },
+  
+  header: { alignItems: 'center', marginBottom: 24 },
+  logoContainer: { position: 'relative', marginBottom: 16 },
+  logoBox: { backgroundColor: PRIMARY_COLOR, width: 64, height: 64, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  notificationDot: { position: 'absolute', top: -6, right: -6, width: 24, height: 24, borderRadius: 12, backgroundColor: '#64D2FF', alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#F8F9FC' },
+  innerDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#004A66' },
+  title: { fontSize: 32, fontWeight: '800', color: PRIMARY_COLOR, marginBottom: 8 },
+  subtitleContainer: { flexDirection: 'row', alignItems: 'center' },
+  badge: { backgroundColor: '#EBE9FE', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, marginRight: 8 },
+  badgeText: { color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700' },
+  subtitleText: { fontSize: 14, color: '#555', fontWeight: '500' },
 
-passwordContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    marginBottom: 16,
-  },
-  passwordInput: {
-    flex: 1,
-    padding: 16,
-    fontSize: 16,
-  },
-  visibilityToggle: {
-    padding: 16,
-  },
-  visibilityText: {
-    color: '#007AFF',
-    fontWeight: '600',
-  },
+  tabContainer: { flexDirection: 'row', backgroundColor: '#EBE9FE', borderRadius: 12, padding: 4, marginBottom: 24 },
+  tabButton: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  activeTab: { backgroundColor: '#fff', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  tabText: { fontSize: 15, fontWeight: '600', color: '#666' },
+  activeTabText: { color: PRIMARY_COLOR },
 
-  primaryButton: {
-    backgroundColor: '#007AFF', // You can change this to match your app's theme
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  switchButton: {
-    marginTop: 16,
-    alignItems: 'center',
-  },
-  switchText: {
-    color: '#007AFF',
-    fontSize: 14,
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 32,
-  },
-  line: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#e0e0e0',
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    color: '#888',
-    fontSize: 14,
-  },
-  googleButton: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  googleButtonText: {
-    color: '#333',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  form: { width: '100%' },
+  inputLabel: { fontSize: 14, fontWeight: '600', color: '#444', marginBottom: 8 },
+  passwordHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, marginTop: 16 },
+  forgotPasswordText: { fontSize: 14, fontWeight: '600', color: PRIMARY_COLOR },
+  
+  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#E2E2E8', paddingHorizontal: 16, height: 56 },
+  inputIcon: { marginRight: 12 },
+  input: { flex: 1, fontSize: 15, color: '#333' },
+
+  infoBox: { flexDirection: 'row', backgroundColor: '#F3F0FF', padding: 16, borderRadius: 12, marginTop: 24, alignItems: 'center' },
+  infoIcon: { marginRight: 12 },
+  infoText: { flex: 1, fontSize: 13, color: '#555', lineHeight: 20 },
+
+  primaryButton: { backgroundColor: PRIMARY_COLOR, padding: 16, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 24 },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700', marginRight: 8 },
+  buttonIcon: { marginTop: 2 },
+
+  dividerContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: 32 },
+  line: { flex: 1, height: 1, backgroundColor: '#E2E2E8' },
+  dividerText: { marginHorizontal: 16, color: '#888', fontSize: 12, fontWeight: '600' },
+
+  googleButton: { backgroundColor: '#fff', height: 56, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E2E8', marginBottom: 32 },
+  googleIcon: { marginRight: 12 },
+  googleButtonText: { color: '#333', fontSize: 16, fontWeight: '700' },
+
+  footerText: { textAlign: 'center', fontSize: 13, color: '#888', lineHeight: 20, paddingHorizontal: 16 },
+  linkText: { color: '#555', fontWeight: '600', textDecorationLine: 'underline' },
 });

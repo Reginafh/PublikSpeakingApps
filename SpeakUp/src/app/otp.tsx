@@ -1,16 +1,16 @@
-import React, { useState, useRef } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  TextInput, 
-  TouchableOpacity, 
-  Text, 
-  Alert, 
-  KeyboardAvoidingView, 
-  Platform 
+import { useRouter } from 'expo-router';
+import { useRef, useState } from 'react';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 
 export default function OTPScreen() {
   const router = useRouter();
@@ -57,7 +57,7 @@ export default function OTPScreen() {
     
     // TODO: Verify the OTP with your backend here
     Alert.alert('Success', 'Email verified successfully!', [
-      { text: 'OK', onPress: () => router.replace('/') } // Go to home screen
+      { text: 'OK', onPress: () => router.replace('/Homepage') } // Go to home screen
     ]);
   };
 
