@@ -5,6 +5,9 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 from firebase_admin import firestore
 
+# Inisialisasi Firestore DB
+db = firestore.client()      
+
 # Inisialisasi Router
 router = APIRouter(prefix="/api", tags=["Home & Core Features"])
 
@@ -99,78 +102,35 @@ def get_home_summary(user_id: str):
         "store_events": store_events
     }
 
-# 2. UPLOAD PRESENTASI & SETTING AI (KHUSUS FILE .MP3)
-@router.post("/upload")
-async def upload_presentation(
-    user_id: str = Form(...),
-    file: UploadFile = File(...),
-    strictness_level: str = Form("medium"),
-    focus_area: str = Form("articulation")
-):
-    # Validasi format file wajib .mp3
-    if not file.filename.lower().endswith(".mp3"):
-        raise HTTPException(
-            status_code=400, 
-            detail="Format file tidak valid. Hanya file audio dengan format .mp3 yang diperbolehkan."
-        )
-
-    db = get_db()
-    user_data = get_updated_user_tokens(user_id)
-    if user_data.get("tokens", 0) < 1:
-        raise HTTPException(status_code=400, detail="Token kamu habis. Silakan beli token atau tunggu reset harian.")
-
-    # Potong 1 token untuk upload
-    db.collection("users").document(user_id).update({
-        "tokens": user_data["tokens"] - 1
-    })
-
-    # Simulasi simpan file & analisis AI
-    doc_ref = db.collection("upload_history").document()
-    history_data = {
-        "history_id": doc_ref.id,
-        "user_id": user_id,
-        "filename": file.filename,
-        "created_at": datetime.now().isoformat(),
-        "ai_settings": {
-            "strictness_level": strictness_level,
-            "focus_area": focus_area
-        },
-        "ai_feedback": {
-            "score": 85,
-            "summary": "Presentasi sudah baik, namun intonasi suara perlu dinaikkan sedikit.",
-            "articulation_score": 80,
-            "pace_wpm": 130
-        }
-    }
-    doc_ref.set(history_data)
-
-    return {
-        "status": "success",
-        "message": "File berhasil diunggah dan dianalisis.",
-        "tokens_remaining": user_data["tokens"] - 1,
-        "history_id": doc_ref.id
-    }
 
 # 3. SEMUA HISTORY UPLOAD
 @router.get("/history/all/{user_id}")
 def get_all_history(user_id: str):
-    db = get_db()
-    history_ref = db.collection("upload_history")\
-                    .where("user_id", "==", user_id)\
-                    .stream()
+    docs = db.collection("upload_history").where("user_id", "==", user_id).stream()
     
-    histories = [h.to_dict() for h in history_ref]
-    return {"status": "success", "data": histories}
+    history_list = []
+    for doc in docs:
+        history_list.append(doc.to_dict())
+
+    return {
+        "status": "success",
+        "total": len(history_list),
+        "data": history_list
+    }
 
 # 4. DETAIL ULASAN AI SPESIFIK
 @router.get("/history/detail/{history_id}")
 def get_history_detail(history_id: str):
-    db = get_db()
-    doc = db.collection("upload_history").document(history_id).get()
+    doc_ref = db.collection("upload_history").document(history_id)
+    doc = doc_ref.get()
+
     if not doc.exists:
-        raise HTTPException(status_code=404, detail="Data history tidak ditemukan.")
-    
-    return {"status": "success", "data": doc.to_dict()}
+        raise HTTPException(status_code=404, detail="Riwayat tidak ditemukan")
+
+    return {
+        "status": "success",
+        "data": doc.to_dict()
+    }
 
 # 5. TOKO TOKEN & INFO REFRESH
 @router.get("/store/info/{user_id}")
