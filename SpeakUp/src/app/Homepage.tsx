@@ -1,276 +1,727 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
-    Image,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { BottomNavBar } from '../components/BottomNavBar';
+import { ScoreGauge } from '../components/ScoreGauge';
+import { Colors } from '../constants/designSystem';
+import { SpeechEvaluation, SpeechStorage, UserProfile } from '../services/speechStorage';
 
 export default function HomeScreen() {
+  const router = useRouter();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [speeches, setSpeeches] = useState<SpeechEvaluation[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedScenario, setSelectedScenario] = useState('Elevator Pitch');
+
+  const loadData = useCallback(async () => {
+    const prof = await SpeechStorage.getProfile();
+    const list = await SpeechStorage.getSpeeches();
+    setProfile(prof);
+    setSpeeches(list);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
+
+  const handleStartPractice = (scenarioName?: string) => {
+    const scenario = scenarioName || selectedScenario;
+    router.push({
+      pathname: '/recording',
+      params: { scenario },
+    });
+  };
+
+  const handleViewSpeech = (id: string) => {
+    router.push({
+      pathname: '/evaluation',
+      params: { id },
+    });
+  };
+
+  const scenarios = [
+    { id: 'Elevator Pitch', label: 'Elevator Pitch', icon: 'rocket-outline' },
+    { id: 'Job Interview', label: 'Job Interview', icon: 'briefcase-outline' },
+    { id: 'Storytelling', label: 'Storytelling', icon: 'book-outline' },
+    { id: 'Executive Update', label: 'Executive Update', icon: 'stats-chart-outline' },
+  ];
+
+  const overallScore = profile?.overallScore ?? 84;
+  const streakDays = profile?.streakDays ?? 5;
+  const userName = profile?.name?.split(' ')[0] || 'Alex';
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        
-        {/* HEADER */}
-        <View style={styles.header}>
-          <View style={styles.profileSection}>
-            <Image 
-              source={{ uri: 'https://i.pravatar.cc/100?img=1' }} // Placeholder profile image
-              style={styles.profileImage} 
-            />
-            <View>
-              <Text style={styles.logoText}>SpeakUp</Text>
-              <Text style={styles.greetingText}>Hi, Alex! 👋</Text>
-            </View>
-          </View>
-          
-          <View style={styles.headerRight}>
-            <View style={styles.streakBadge}>
-              <Text style={styles.streakText}>🔥 5 Days</Text>
-            </View>
-            <TouchableOpacity style={styles.bellIcon}>
-              <Ionicons name="notifications-outline" size={24} color="#333" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* OVERALL FLUENCY CARD */}
-        <View style={styles.card}>
-          <View style={styles.fluencyHeader}>
-            <View>
-              <View style={styles.geminiBadge}>
-                <Ionicons name="sparkles" size={12} color="#008E8F" />
-                <Text style={styles.geminiBadgeText}>Gemini Evaluated</Text>
+      <View style={styles.container}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+          }
+        >
+          {/* Top App Bar */}
+          <View style={styles.topBar}>
+            <View style={styles.userSection}>
+              <View style={styles.avatarCircle}>
+                <Text style={styles.avatarText}>{userName.charAt(0)}</Text>
               </View>
-              <Text style={styles.cardTitle}>Overall Fluency Score</Text>
-              <Text style={styles.cardSubtitle}>Top 12% among peer speakers</Text>
-              
-              <View style={styles.trendRow}>
-                <Ionicons name="trending-up" size={16} color="#00B59C" />
-                <Text style={styles.trendText}>+6 pts this week</Text>
+              <View>
+                <Text style={styles.logoTitle}>SpeakUp</Text>
+                <Text style={styles.greetingText}>Hi, {userName}! 👋</Text>
               </View>
             </View>
-            
-            {/* Mock Circular Progress */}
-            <View style={styles.scoreCircle}>
-              <Text style={styles.scoreNumber}>84</Text>
-              <Text style={styles.scoreMax}>/ 100</Text>
+
+            <View style={styles.topRight}>
+              <View style={styles.streakBadge}>
+                <Text style={styles.streakEmoji}>🔥</Text>
+                <Text style={styles.streakText}>{streakDays} Days</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.settingsButton}
+                onPress={() => router.push('/settings')}
+              >
+                <Ionicons name="settings-outline" size={20} color={Colors.onSurfaceVariant} />
+              </TouchableOpacity>
             </View>
           </View>
 
-          <View style={styles.metricsRow}>
-            <View style={styles.metricItem}>
-              <Text style={styles.metricLabel}>Pace</Text>
-              <Text style={styles.metricValue}>142 wpm</Text>
-            </View>
-            <View style={styles.metricDivider} />
-            <View style={styles.metricItem}>
-              <Text style={styles.metricLabel}>Fillers</Text>
-              <Text style={[styles.metricValue, { color: '#00B59C' }]}>1.2%</Text>
-            </View>
-            <View style={styles.metricDivider} />
-            <View style={styles.metricItem}>
-              <Text style={styles.metricLabel}>Clarity</Text>
-              <Text style={styles.metricValue}>92%</Text>
-            </View>
-          </View>
-        </View>
+          {/* Overall Fluency Banner Card */}
+          <View style={styles.fluencyCard}>
+            <View style={styles.fluencyTopRow}>
+              <View style={styles.fluencyLeft}>
+                <View style={styles.geminiBadge}>
+                  <Ionicons name="sparkles" size={12} color={Colors.secondary} />
+                  <Text style={styles.geminiBadgeText}>Gemini Evaluated</Text>
+                </View>
 
-        {/* START SPEAKING PRACTICE CARD */}
-        <View style={[styles.card, styles.practiceCard]}>
-          <View style={styles.practiceHeader}>
-            <View style={styles.telemetryBadge}>
-              <View style={styles.liveDot} />
-              <Text style={styles.telemetryText}>Live AI Telemetry Ready</Text>
-            </View>
-            <TouchableOpacity style={styles.micButton}>
-              <Ionicons name="mic" size={24} color="#3924B7" />
-            </TouchableOpacity>
-          </View>
-          
-          <Text style={styles.practiceTitle}>Start Speaking Practice</Text>
-          <Text style={styles.practiceSubtitle}>Real-time cadence, fillers & tone coach</Text>
-          
-          <Text style={styles.scenarioLabel}>Select Target Scenario:</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scenarioScroll}>
-            <TouchableOpacity style={styles.scenarioPill}>
-              <Ionicons name="rocket-outline" size={16} color="#3924B7" />
-              <Text style={styles.scenarioText}>Elevator Pitch</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.scenarioPillDark}>
-              <Ionicons name="briefcase-outline" size={16} color="#fff" />
-              <Text style={styles.scenarioTextDark}>Job Interview</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.scenarioPillDark}>
-              <Ionicons name="book-outline" size={16} color="#fff" />
-              <Text style={styles.scenarioTextDark}>Storytelling</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
+                <Text style={styles.fluencyTitle}>Overall Fluency Score</Text>
+                <Text style={styles.fluencySubtitle}>Top 12% among peer speakers</Text>
 
-        {/* DAILY GEMINI TIP */}
-        <View style={styles.tipCard}>
-          <View style={styles.tipHeader}>
-            <View style={styles.tipIconBox}>
-              <Ionicons name="bulb-outline" size={20} color="#3924B7" />
+                <View style={styles.trendRow}>
+                  <Ionicons name="trending-up" size={16} color={Colors.secondary} />
+                  <Text style={styles.trendText}>+6 pts this week</Text>
+                </View>
+              </View>
+
+              {/* Radial Progress Gauge */}
+              <View style={styles.gaugeWrapper}>
+                <ScoreGauge score={overallScore} size={88} strokeWidth={8} />
+              </View>
             </View>
-            <View>
-              <Text style={styles.tipTitle}>Daily Gemini Tip</Text>
-              <Text style={styles.tipSubtitle}>Filler Word Reduction</Text>
+
+            {/* Telemetry Breakdown Bar */}
+            <View style={styles.telemetryBar}>
+              <View style={styles.telemetryCol}>
+                <Text style={styles.telemetryLabel}>Pace</Text>
+                <Text style={[styles.telemetryValue, { color: Colors.primary }]}>
+                  {profile?.averagePace ?? 142} wpm
+                </Text>
+              </View>
+              <View style={styles.telemetryDivider} />
+              <View style={styles.telemetryCol}>
+                <Text style={styles.telemetryLabel}>Fillers</Text>
+                <Text style={[styles.telemetryValue, { color: Colors.secondary }]}>
+                  {profile?.averageFillersPct ?? 1.2}%
+                </Text>
+              </View>
+              <View style={styles.telemetryDivider} />
+              <View style={styles.telemetryCol}>
+                <Text style={styles.telemetryLabel}>Clarity</Text>
+                <Text style={[styles.telemetryValue, { color: Colors.primary }]}>
+                  {profile?.averageClarityPct ?? 92}%
+                </Text>
+              </View>
             </View>
           </View>
-          <Text style={styles.tipBody}>
-            "When you feel the impulse to say <Text style={styles.highlightPill}>'um'</Text> or <Text style={styles.highlightPill}>'like'</Text>, ground your breath and pause for 1 second. Silence conveys confidence, not hesitation."
-          </Text>
-        </View>
 
-        {/* RECENT SPEECHES */}
-        <View style={styles.recentHeader}>
-          <Text style={styles.sectionTitle}>Recent Speeches</Text>
-          <TouchableOpacity>
-            <Text style={styles.viewAllText}>View All</Text>
-          </TouchableOpacity>
-        </View>
+          {/* Start Speaking Practice Quick-Action Card */}
+          <View style={styles.practiceCard}>
+            <View style={styles.practiceHeader}>
+              <View>
+                <View style={styles.liveTelemetryBadge}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.liveTelemetryText}>Live AI Telemetry Ready</Text>
+                </View>
+                <Text style={styles.practiceTitle}>Start Speaking Practice</Text>
+                <Text style={styles.practiceSubtitle}>Real-time cadence, fillers & tone coach</Text>
+              </View>
 
-        {/* Speech Item 1 */}
-        <TouchableOpacity style={styles.speechItem}>
-          <View style={[styles.speechIconBox, { backgroundColor: '#EBE9FE' }]}>
-            <MaterialCommunityIcons name="waveform" size={24} color="#3924B7" />
-          </View>
-          <View style={styles.speechDetails}>
-            <Text style={styles.speechTitle}>Project Proposal</Text>
-            <Text style={styles.speechMeta}>Today, 10:24 AM  •  3m 12s</Text>
-          </View>
-          <View style={styles.speechScore}>
-            <View style={[styles.scoreBadge, { backgroundColor: '#E0F7FA' }]}>
-              <Ionicons name="star" size={12} color="#004D40" />
-              <Text style={[styles.scoreBadgeText, { color: '#004D40' }]}>88/100</Text>
+              <TouchableOpacity
+                style={styles.micCircleButton}
+                onPress={() => handleStartPractice()}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="mic" size={24} color={Colors.primary} />
+              </TouchableOpacity>
             </View>
-            <Text style={[styles.scoreStatus, { color: '#008E8F' }]}>Fluent Cadence</Text>
-          </View>
-        </TouchableOpacity>
 
-        {/* Speech Item 2 */}
-        <TouchableOpacity style={styles.speechItem}>
-          <View style={[styles.speechIconBox, { backgroundColor: '#F3F4F6' }]}>
-            <Ionicons name="git-commit-outline" size={24} color="#4B5563" />
-          </View>
-          <View style={styles.speechDetails}>
-            <Text style={styles.speechTitle}>Impression Speech</Text>
-            <Text style={styles.speechMeta}>Yesterday  •  5m 45s</Text>
-          </View>
-          <View style={styles.speechScore}>
-            <View style={[styles.scoreBadge, { backgroundColor: '#FEE2E2' }]}>
-              <Text style={[styles.scoreBadgeText, { color: '#991B1B' }]}>76/100</Text>
+            {/* Scenario Pills */}
+            <View style={styles.scenarioSection}>
+              <Text style={styles.scenarioLabel}>Select Target Scenario:</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.scenariosScroll}
+              >
+                {scenarios.map((sc) => {
+                  const isSelected = selectedScenario === sc.id;
+                  return (
+                    <TouchableOpacity
+                      key={sc.id}
+                      style={[
+                        styles.scenarioPill,
+                        isSelected ? styles.scenarioPillSelected : styles.scenarioPillUnselected,
+                      ]}
+                      onPress={() => setSelectedScenario(sc.id)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name={sc.icon as any}
+                        size={15}
+                        color={isSelected ? Colors.primary : '#FFFFFF'}
+                      />
+                      <Text
+                        style={[
+                          styles.scenarioPillText,
+                          { color: isSelected ? Colors.primary : '#FFFFFF' },
+                        ]}
+                      >
+                        {sc.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
-            <Text style={[styles.scoreStatus, { color: '#DC2626' }]}>4 Filler Words</Text>
           </View>
-        </TouchableOpacity>
 
-        {/* Speech Item 3 */}
-        <TouchableOpacity style={styles.speechItem}>
-          <View style={[styles.speechIconBox, { backgroundColor: '#EBE9FE' }]}>
-            <MaterialCommunityIcons name="account-tie-voice-outline" size={24} color="#3924B7" />
-          </View>
-          <View style={styles.speechDetails}>
-            <Text style={styles.speechTitle}>Keynote Practice</Text>
-            <Text style={styles.speechMeta}>Oct 14  •  8m 20s</Text>
-          </View>
-          <View style={styles.speechScore}>
-            <View style={[styles.scoreBadge, { backgroundColor: '#E0F7FA' }]}>
-              <Ionicons name="star" size={12} color="#004D40" />
-              <Text style={[styles.scoreBadgeText, { color: '#004D40' }]}>91/100</Text>
+          {/* Daily Gemini Tip Card */}
+          <View style={styles.tipCard}>
+            <View style={styles.tipHeader}>
+              <View style={styles.tipIconSquare}>
+                <Ionicons name="bulb-outline" size={18} color={Colors.primary} />
+              </View>
+              <View>
+                <Text style={styles.tipTitle}>Daily Gemini Tip</Text>
+                <Text style={styles.tipSubtitle}>Filler Word Reduction</Text>
+              </View>
             </View>
-            <Text style={[styles.scoreStatus, { color: '#008E8F' }]}>Peak Delivery</Text>
+            <Text style={styles.tipBody}>
+              &quot;When you feel the impulse to say{' '}
+              <Text style={styles.highlightPill}>&apos;um&apos;</Text> or{' '}
+              <Text style={styles.highlightPill}>&apos;like&apos;</Text>, ground your breath and pause for 1 second. Silence conveys confidence, not hesitation.&quot;
+            </Text>
           </View>
-        </TouchableOpacity>
 
-      </ScrollView>
+          {/* Recent Speeches Section */}
+          <View style={styles.speechesSection}>
+            <View style={styles.speechesHeader}>
+              <Text style={styles.sectionTitle}>Recent Speeches</Text>
+              {speeches.length > 0 && (
+                <Text style={styles.speechesCount}>{speeches.length} Sessions</Text>
+              )}
+            </View>
+
+            {speeches.length > 0 ? (
+              speeches.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.speechItem}
+                  onPress={() => handleViewSpeech(item.id)}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.speechIconBox}>
+                    <MaterialCommunityIcons
+                      name="waveform"
+                      size={22}
+                      color={Colors.primary}
+                    />
+                  </View>
+
+                  <View style={styles.speechDetails}>
+                    <Text style={styles.speechTitle} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.speechMeta}>
+                      {item.date} • {item.durationDisplay}
+                    </Text>
+                  </View>
+
+                  <View style={styles.speechScoreCol}>
+                    <View style={styles.scorePill}>
+                      <Ionicons name="star" size={11} color="#004D40" />
+                      <Text style={styles.scorePillText}>{item.overallScore}/100</Text>
+                    </View>
+                    <Text style={styles.gradeSubtitle}>
+                      {item.fillerWordsCount === 0
+                        ? 'Zero Fillers'
+                        : `${item.fillerWordsCount} Fillers`}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="mic-outline" size={36} color={Colors.outline} />
+                <Text style={styles.emptyTitle}>No Speeches Recorded Yet</Text>
+                <Text style={styles.emptySubtitle}>
+                  Tap below to start your first speech analysis and unlock Gemini AI feedback.
+                </Text>
+                <TouchableOpacity
+                  style={styles.emptyButton}
+                  onPress={() => handleStartPractice()}
+                >
+                  <Text style={styles.emptyButtonText}>Start First Practice</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+
+        {/* Fixed Bottom Navigation Bar */}
+        <BottomNavBar />
+      </View>
     </SafeAreaView>
   );
 }
 
-const PRIMARY_COLOR = '#3924B7';
-const BG_COLOR = '#F8F9FC';
-
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: BG_COLOR },
-  scrollContainer: { padding: 20, paddingBottom: 40 },
-  
-  // Header
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, marginTop: Platform.OS === 'android' ? 24 : 0 },
-  profileSection: { flexDirection: 'row', alignItems: 'center' },
-  profileImage: { width: 44, height: 44, borderRadius: 22, marginRight: 12 },
-  logoText: { fontSize: 18, fontWeight: '800', color: PRIMARY_COLOR },
-  greetingText: { fontSize: 14, color: '#555', fontWeight: '500' },
-  headerRight: { flexDirection: 'row', alignItems: 'center' },
-  streakBadge: { backgroundColor: '#FFEFED', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, marginRight: 12 },
-  streakText: { color: '#D93025', fontSize: 13, fontWeight: '700' },
-  bellIcon: { padding: 4 },
-
-  // Cards General
-  card: { backgroundColor: '#fff', borderRadius: 20, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
-  
-  // Fluency Card
-  fluencyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  geminiBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E0F7FA', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, alignSelf: 'flex-start', marginBottom: 8 },
-  geminiBadgeText: { color: '#008E8F', fontSize: 12, fontWeight: '700', marginLeft: 4 },
-  cardTitle: { fontSize: 18, fontWeight: '700', color: '#333', marginBottom: 4 },
-  cardSubtitle: { fontSize: 13, color: '#666', marginBottom: 8 },
-  trendRow: { flexDirection: 'row', alignItems: 'center' },
-  trendText: { color: '#00B59C', fontSize: 13, fontWeight: '600', marginLeft: 4 },
-  
-  scoreCircle: { width: 80, height: 80, borderRadius: 40, borderWidth: 6, borderColor: PRIMARY_COLOR, borderRightColor: '#EBE9FE', alignItems: 'center', justifyContent: 'center' },
-  scoreNumber: { fontSize: 24, fontWeight: '800', color: '#333' },
-  scoreMax: { fontSize: 12, color: '#888', marginTop: -4 },
-
-  metricsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 24, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#F0F0F5' },
-  metricItem: { alignItems: 'center', flex: 1 },
-  metricLabel: { fontSize: 12, color: '#666', fontWeight: '500', marginBottom: 4 },
-  metricValue: { fontSize: 16, fontWeight: '700', color: PRIMARY_COLOR },
-  metricDivider: { width: 1, backgroundColor: '#F0F0F5', height: '100%' },
-
-  // Practice Card
-  practiceCard: { backgroundColor: PRIMARY_COLOR },
-  practiceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  telemetryBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff', opacity: 0.8, marginRight: 6 },
-  telemetryText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  micButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  practiceTitle: { fontSize: 22, fontWeight: '700', color: '#fff', marginBottom: 4 },
-  practiceSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginBottom: 20 },
-  scenarioLabel: { fontSize: 12, color: '#fff', fontWeight: '600', marginBottom: 10 },
-  scenarioScroll: { flexDirection: 'row', marginHorizontal: -20, paddingHorizontal: 20 },
-  scenarioPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 12 },
-  scenarioText: { color: PRIMARY_COLOR, fontSize: 13, fontWeight: '700', marginLeft: 6 },
-  scenarioPillDark: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 12 },
-  scenarioTextDark: { color: '#fff', fontSize: 13, fontWeight: '600', marginLeft: 6 },
-
-  // Tip Card
-  tipCard: { backgroundColor: '#F8F6FF', borderRadius: 16, padding: 20, marginBottom: 24, borderWidth: 1, borderColor: '#EBE9FE' },
-  tipHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  tipIconBox: { width: 36, height: 36, borderRadius: 8, backgroundColor: '#EBE9FE', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  tipTitle: { fontSize: 15, fontWeight: '700', color: '#333' },
-  tipSubtitle: { fontSize: 13, color: '#666' },
-  tipBody: { fontSize: 15, color: '#444', lineHeight: 22 },
-  highlightPill: { backgroundColor: '#FFD7D7', color: '#991B1B', fontWeight: '600' },
-
-  // Recent Speeches
-  recentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  sectionTitle: { fontSize: 20, fontWeight: '700', color: '#333' },
-  viewAllText: { fontSize: 14, fontWeight: '600', color: PRIMARY_COLOR },
-  
-  speechItem: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12, alignItems: 'center', borderWidth: 1, borderColor: '#F0F0F5' },
-  speechIconBox: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
-  speechDetails: { flex: 1 },
-  speechTitle: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 4 },
-  speechMeta: { fontSize: 12, color: '#888' },
-  speechScore: { alignItems: 'flex-end' },
-  scoreBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginBottom: 4 },
-  scoreBadgeText: { fontSize: 13, fontWeight: '700', marginLeft: 4 },
-  scoreStatus: { fontSize: 11, fontWeight: '600' },
+  safeArea: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  container: {
+    flex: 1,
+    position: 'relative',
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 96,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+  },
+  userSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  avatarCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primaryFixed,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.primaryContainer,
+  },
+  avatarText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  logoTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.primary,
+    letterSpacing: -0.5,
+  },
+  greetingText: {
+    fontSize: 13,
+    color: Colors.onSurfaceVariant,
+    fontWeight: '500',
+  },
+  topRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  streakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.tertiaryFixed,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 9999,
+    gap: 4,
+  },
+  streakEmoji: {
+    fontSize: 12,
+  },
+  streakText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.onTertiaryFixed,
+  },
+  settingsButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.surfaceContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fluencyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.surfaceContainerHigh,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+    marginBottom: 16,
+  },
+  fluencyTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  fluencyLeft: {
+    flex: 1,
+  },
+  geminiBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.secondaryFixed,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 9999,
+    alignSelf: 'flex-start',
+    gap: 4,
+    marginBottom: 6,
+  },
+  geminiBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.onSecondaryContainer,
+  },
+  fluencyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  fluencySubtitle: {
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
+    marginTop: 2,
+  },
+  trendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  trendText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.secondary,
+  },
+  gaugeWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
+  },
+  telemetryBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.surfaceContainerLow,
+  },
+  telemetryCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  telemetryLabel: {
+    fontSize: 11,
+    color: Colors.onSurfaceVariant,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  telemetryValue: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  telemetryDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: Colors.surfaceContainer,
+  },
+  practiceCard: {
+    backgroundColor: Colors.primaryContainer,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  practiceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  liveTelemetryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 9999,
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginBottom: 6,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.secondaryFixed,
+  },
+  liveTelemetryText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  practiceTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+  },
+  practiceSubtitle: {
+    fontSize: 12,
+    color: Colors.onPrimaryContainer,
+    marginTop: 2,
+  },
+  micCircleButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  scenarioSection: {
+    marginTop: 14,
+  },
+  scenarioLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.onPrimaryContainer,
+    marginBottom: 8,
+  },
+  scenariosScroll: {
+    gap: 8,
+  },
+  scenarioPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 9999,
+  },
+  scenarioPillSelected: {
+    backgroundColor: '#FFFFFF',
+  },
+  scenarioPillUnselected: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  scenarioPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  tipCard: {
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.surfaceContainerHigh,
+    marginBottom: 18,
+  },
+  tipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  tipIconSquare: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: Colors.primaryFixed,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tipTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  tipSubtitle: {
+    fontSize: 11,
+    color: Colors.onSurfaceVariant,
+  },
+  tipBody: {
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
+    lineHeight: 18,
+  },
+  highlightPill: {
+    backgroundColor: Colors.tertiaryFixed,
+    color: Colors.onTertiaryFixed,
+    fontWeight: '700',
+    paddingHorizontal: 4,
+  },
+  speechesSection: {
+    marginBottom: 16,
+  },
+  speechesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  speechesCount: {
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
+    fontWeight: '500',
+  },
+  speechItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: Colors.surfaceContainerHigh,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  speechIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: Colors.primaryFixed,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  speechDetails: {
+    flex: 1,
+  },
+  speechTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.onSurface,
+    marginBottom: 2,
+  },
+  speechMeta: {
+    fontSize: 11,
+    color: Colors.onSurfaceVariant,
+  },
+  speechScoreCol: {
+    alignItems: 'flex-end',
+  },
+  scorePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E0F7FA',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 9999,
+  },
+  scorePillText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#004D40',
+  },
+  gradeSubtitle: {
+    fontSize: 10,
+    color: Colors.secondary,
+    fontWeight: '600',
+    marginTop: 3,
+  },
+  emptyContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.surfaceContainerHigh,
+    borderStyle: 'dashed',
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.onSurface,
+    marginTop: 10,
+  },
+  emptySubtitle: {
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 18,
+    maxWidth: 260,
+  },
+  emptyButton: {
+    marginTop: 14,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  emptyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
 });
