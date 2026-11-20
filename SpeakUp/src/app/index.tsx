@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -16,6 +17,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/designSystem';
 import { SpeechStorage } from '../services/speechStorage';
 
+import { apiRequest, AuthStorage, extractUidFromJwt } from '../services/api';
+
 export default function LoginScreen() {
   const router = useRouter();
   const [fullName, setFullName] = useState('');
@@ -23,6 +26,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const isValidEmail = (emailText: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -30,7 +34,7 @@ export default function LoginScreen() {
   };
 
   const handleAuth = async () => {
-    const cleanEmail = email.trim();
+    const cleanEmail = email.trim().toLowerCase();
     const cleanPassword = password.trim();
 
     // 1. Validation
@@ -47,28 +51,90 @@ export default function LoginScreen() {
       return Alert.alert('Weak Password', 'Password must be at least 6 characters long.');
     }
 
-    if (isLogin) {
-      // Sign In Flow
-      // Update or preserve user profile
-      const currentProfile = await SpeechStorage.getProfile();
-      await SpeechStorage.saveProfile({
-        ...currentProfile,
-        email: cleanEmail,
-      });
-      router.replace('/Homepage');
-    } else {
-      // Sign Up Flow - route to OTP verification
-      const currentProfile = await SpeechStorage.getProfile();
-      await SpeechStorage.saveProfile({
-        ...currentProfile,
-        name: fullName.trim(),
-        email: cleanEmail,
-      });
-      router.push({
-        pathname: '/otp',
-        params: { email: cleanEmail },
-      });
+    setIsLoading(true);
+
+    try{
+      
+      if (isLogin) {
+
+        // 2. Call FastAPI /auth/login
+        const res = await apiRequest<{
+          status: string;
+          message: string;
+          token: string;
+          idToken: string;
+          refreshToken: string;
+        }>('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({
+            email: cleanEmail,
+            password: cleanPassword,
+          }),
+        });
+
+        const userId = extractUidFromJwt(res.token || res.idToken);
+        if (!userId) {
+          throw new Error('Gagal mendapatkan User ID dari token.');
+        }
+
+        // Save session for Home & Upload screens
+        await AuthStorage.saveSession({
+          userId,
+          email: cleanEmail,
+          token: res.token,
+          idToken: res.idToken,
+          refreshToken: res.refreshToken,
+        });
+
+        // Sign In Flow
+        // Update or preserve user profile
+        const currentProfile = await SpeechStorage.getProfile();
+        await SpeechStorage.saveProfile({
+          ...currentProfile,
+          email: cleanEmail,
+        });
+
+        router.replace('/Homepage');
+
+      } 
+      else {
+
+        // 3. Call FastAPI /auth/register
+        const res = await apiRequest<{ status: string; message: string }>(
+          '/auth/register',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              email: cleanEmail,
+              password: cleanPassword,
+            }),
+          }
+        );
+
+        // Sign Up Flow - route to OTP verification
+        const currentProfile = await SpeechStorage.getProfile();
+        await SpeechStorage.saveProfile({
+          ...currentProfile,
+          name: fullName.trim(),
+          email: cleanEmail,
+        });
+
+        Alert.alert('OTP Sent', res.message);
+
+        router.push({
+          pathname: '/otp',
+          params: { email: cleanEmail },
+        });
+      }
+
     }
+    catch (error: any){
+      Alert.alert(isLogin ? 'Login Failed' : 'Registration Failed', error.message);
+    }
+    finally{
+      setIsLoading(false);
+    }
+    
   };
 
   const handleGoogleAuth = async () => {
@@ -207,11 +273,22 @@ export default function LoginScreen() {
             </View>
 
             {/* Primary Action Button */}
-            <TouchableOpacity style={styles.primaryButton} onPress={handleAuth} activeOpacity={0.85}>
-              <Text style={styles.primaryButtonText}>
-                {isLogin ? 'Sign In' : 'Create Account'}
-              </Text>
-              <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+            <TouchableOpacity 
+            style={[styles.primaryButton, isLoading && { opacity: 0.7 }]} 
+            onPress={handleAuth} 
+            disabled={isLoading}
+            activeOpacity={0.85}>
+
+              {isLoading ? (
+              <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <Text style={styles.primaryButtonText}>
+                    {isLogin ? 'Sign In' : 'Create Account'}
+                  </Text>
+                  <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                </>
+              )}
             </TouchableOpacity>
 
             {/* SSO Divider */}

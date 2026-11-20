@@ -14,12 +14,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/designSystem';
+import { apiRequest, AuthStorage, extractUidFromJwt } from '../services/api';
 
 export default function OTPScreen() {
   const router = useRouter();
   const { email } = useLocalSearchParams<{ email?: string }>();
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
-  const [countdown, setCountdown] = useState(45);
+  const [countdown, setCountdown] = useState(60);
+  const [isVerifying, setIsVerifying] = useState(false);
   const inputRefs = useRef<any[]>([]);
 
   useEffect(() => {
@@ -49,21 +51,68 @@ export default function OTPScreen() {
     }
   };
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     const otpString = otp.join('');
     if (otpString.length < 6) {
       return Alert.alert('Incomplete Code', 'Please enter all 6 digits.');
     }
+    if (!email) {
+      return Alert.alert('Error', 'Email parameter is missing.');
+    }
 
-    Alert.alert('Success', 'Email verified successfully! Welcome to SpeakUp.', [
-      { text: 'Get Started', onPress: () => router.replace('/Homepage') },
-    ]);
+    setIsVerifying(true);
+    try {
+      const res = await apiRequest<{
+        status: string;
+        message: string;
+        token: string | null;
+      }>('/auth/verify-otp', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          otp_code: otpString,
+        }),
+      });
+
+      if (res.token) {
+        const userId = extractUidFromJwt(res.token);
+        await AuthStorage.saveSession({
+          userId,
+          email: email.trim().toLowerCase(),
+          token: res.token,
+        });
+      }
+
+      Alert.alert('Success', res.message, [
+        { text: 'Get Started', onPress: () => router.replace('/Homepage') },
+      ]);
+    }
+    catch (error: any){
+      Alert.alert('Verification Failed', error.message);
+    } 
+    finally{
+      setIsVerifying(false);
+    }
   };
 
-  const handleResend = () => {
-    if (countdown > 0) return;
-    setCountdown(45);
-    Alert.alert('Code Resent', `A new verification code was sent to ${email || 'your email'}.`);
+  const handleResend = async () => {
+    if (countdown > 0 || !email) return;
+
+    try{
+      const res = await apiRequest<{ status: string; message: string }>(
+        '/auth/resend-otp',
+        {
+          method: 'POST',
+          body: JSON.stringify({ email: email.trim().toLowerCase() }),
+        }
+      );
+
+      setCountdown(60);
+      Alert.alert('Code Resent', res.message);
+    }
+    catch (error:any){
+      Alert.alert('Resend Failed', error.message);
+    }
   };
 
   return (
