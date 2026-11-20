@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/designSystem';
+import { apiRequest, AuthStorage, extractUidFromJwt } from '../services/api';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -30,21 +31,48 @@ export default function ForgotPasswordScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   const isValidEmail = (emailText: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(emailText.trim());
   };
 
-  const handleSendCode = () => {
-    if (!email.trim()) {
+  const handleSendCode = async () => {
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanEmail) {
       return Alert.alert('Missing Email', 'Please enter your email address.');
     }
-    if (!isValidEmail(email)) {
+    if (!isValidEmail(cleanEmail)) {
       return Alert.alert('Invalid Email', 'Please enter a valid email address.');
     }
-    Alert.alert('Code Sent', `We sent a 6-digit verification code to ${email.trim()}.`);
-    setStep(2);
+
+    setIsSending(true);
+
+    try{
+      const res = await apiRequest<{ status: string; message: string }>(
+        '/auth/reset-password',
+        {
+          method: 'POST',
+          body: JSON.stringify({ email: cleanEmail }),
+        }
+      );
+
+      Alert.alert(
+        'Reset Link Sent',
+        `${res.message}\n\nPlease check your email inbox (and spam folder) and click the link to set your new password.`,
+        [{ text: 'Back to Sign In', onPress: () => router.replace('/') }]
+      );
+    }
+    catch (error:any){
+      Alert.alert('Reset Failed', error.message);
+    }
+    finally{
+      setIsSending(false);
+    }
+
   };
 
   const handleOtpChange = (text: string, index: number) => {

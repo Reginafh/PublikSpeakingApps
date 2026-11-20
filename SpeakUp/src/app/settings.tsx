@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomNavBar } from '../components/BottomNavBar';
 import { Colors } from '../constants/designSystem';
 import { SpeechStorage, UserProfile } from '../services/speechStorage';
+import { AuthStorage } from '../services/api';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -65,7 +66,13 @@ export default function SettingsScreen() {
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to log out of SpeakUp?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: () => router.replace('/') },
+      { text: 'Sign Out', 
+        style: 'destructive', 
+        onPress: async () => {
+          await AuthStorage.clearSession(); 
+          router.replace('/')
+        } 
+      },
     ]);
   };
 
