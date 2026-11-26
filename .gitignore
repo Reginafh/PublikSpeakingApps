@@ -1,6 +1,7 @@
-serviceAccountKey.json
-ServiceAccountKey.json
+*.env
+.env*
+envs/
+*serviceAccountKey*.json
+*ServiceAccountKey*.json
 __pycache__/
 *.pyc
-envs/
-.env
